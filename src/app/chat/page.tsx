@@ -42,7 +42,7 @@ const ChatPage: FC = () => {
 
   return (
     <div>
-      <div className="fixed md:w-1/2 md:left-1/2 md:-translate-x-1/2 max-h-[80vh] overflow-auto p-2" ref={divRef}>
+      <div className="fixed w-full lg:w-1/2 lg:left-1/2 lg:-translate-x-1/2 max-h-[80vh] overflow-auto p-2" ref={divRef}>
         {messages.map((message, index) => (
           <Card key={index} className="mt-5">
             <CardHeader>
@@ -78,7 +78,7 @@ const ChatPage: FC = () => {
           ''
         )}
       </div>
-      <div className="fixed w-full bottom-0 md:left-1/2 md:-translate-x-1/2 md:w-1/2 p-2">
+      <div className="fixed w-full bottom-0 lg:left-1/2 lg:-translate-x-1/2 lg:w-1/2 p-2">
         <div className="flex flex-col">
           {error && (
             <Alert variant="destructive" className="mb-2">
