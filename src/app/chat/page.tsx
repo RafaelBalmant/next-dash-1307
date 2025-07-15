@@ -89,6 +89,12 @@ const ChatPage: FC = () => {
             </Alert>
           )}
           <Textarea
+            onFocus={() => {
+              window.scrollTo({
+                top: document.body.scrollHeight,
+                behavior: 'smooth',
+              });
+            }}
             disabled={loading}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
