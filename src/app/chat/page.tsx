@@ -3,33 +3,83 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import supabase from '@/lib/database';
 import { AlertCircleIcon } from 'lucide-react';
-import { FC, useEffect, useRef, useState } from 'react';
+import { FC, useCallback, useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import { v4 as uuidv4 } from 'uuid';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from '@/components/ui/dialog';
+
+interface userInterface {
+  uuid: string | null;
+  email: string | null;
+  chat_uuid: string | null;
+}
 
 const ChatPage: FC = () => {
   const [prompt, setPrompt] = useState('');
   const [messages, setMessages] = useState<string[]>([]);
   const [loading, setLoading] = useState<true | false>(false);
   const [error, setError] = useState<true | false>(false);
+  const [user, setUser] = useState<userInterface>({
+    uuid: null,
+    email: null,
+    chat_uuid: null,
+  });
+  const [modalRegisterState, setModalRegisterState] = useState(true);
+  const [email, setEmail] = useState('');
   const divRef = useRef<HTMLDivElement>(null);
 
-  const submitPrompt = async (prompt: string) => {
-    if (!prompt) {
-      return setError(true);
-    }
-    setError(false);
+  const insertDatabase = useCallback(
+    async (message: string, type: 'user' | 'assistant' = 'user') => {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          type,
+          user_uuid: user.uuid,
+          chat_uuid: user.chat_uuid,
+          email: user.email,
+          message,
+        })
+        .select();
+      if (data) console.log('suppabase => inserted document', data);
+      if (error) console.log('suppabase => error', error);
+    },
+    [user],
+  );
 
-    setMessages([...messages, prompt]);
-    setLoading(true);
+  const submitPrompt = useCallback(
+    async (prompt: string) => {
+      const { data: records } = await supabase.from('messages').select('*').eq('email', user.email);
 
-    const response = await fetch('/api/openai', {
-      method: 'POST',
-      body: JSON.stringify({ prompt }),
-    });
-    const data = await response.json();
-    setLoading(false);
-    setMessages([...messages, prompt, data.message]);
-  };
+      const historyMessages = records?.map(({ message, type }) => ({
+        role: type,
+        content: message,
+      }));
+
+      if (!prompt) {
+        return setError(true);
+      }
+      setError(false);
+
+      setMessages([...messages, prompt]);
+      setLoading(true);
+
+      const response = await fetch('/api/openai', {
+        method: 'POST',
+        body: JSON.stringify({ prompt, historyMessages }),
+      });
+
+      const data = await response.json();
+      await insertDatabase(prompt, 'user');
+      await insertDatabase(data.message, 'assistant');
+      setLoading(false);
+      setMessages([...messages, prompt, data.message]);
+      setPrompt('');
+    },
+    [user.email, messages, insertDatabase],
+  );
 
   useEffect(() => {
     if (divRef.current) {
@@ -40,9 +90,34 @@ const ChatPage: FC = () => {
     }
   }, [messages]);
 
+  const verifyRegister = useCallback(async () => {
+    const { data, error } = await supabase.from('messages').select('*').eq('email', email);
+    if (error) console.log(error);
+    if (data) console.log(data);
+    setModalRegisterState(false);
+    setUser({
+      uuid: data?.length ? data[0].user_uuid : uuidv4(),
+      email: data?.length ? data[0].email : email,
+      chat_uuid: data?.length ? data[0].chat_uuid : uuidv4(),
+    });
+  }, [email]);
+
   return (
     <div>
       <div className="fixed w-full lg:w-1/2 lg:left-1/2 lg:-translate-x-1/2 max-h-[80vh] overflow-auto p-2" ref={divRef}>
+        <Dialog open={modalRegisterState} onOpenChange={setModalRegisterState}>
+          <DialogContent>
+            <DialogHeader>
+              <h2 className="text-lg font-semibold">Informe seu e-mail</h2>
+            </DialogHeader>
+            <div className="space-y-4 mt-2">
+              <Input onChange={(event) => setEmail(event.target.value)} type="text" placeholder="seu@email.com" />
+            </div>
+            <DialogFooter className="mt-4">
+              <Button onClick={verifyRegister}>Enviar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         {messages.map((message, index) => (
           <Card key={index} className="mt-5">
             <CardHeader>
@@ -56,7 +131,9 @@ const ChatPage: FC = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className={`${index % 2 === 0 ? 'text-right' : 'IA'}`}>{message}</p>
+              <div className={index % 2 === 0 ? 'text-right' : 'IA'}>
+                <ReactMarkdown>{message}</ReactMarkdown>
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -89,6 +166,7 @@ const ChatPage: FC = () => {
             </Alert>
           )}
           <Textarea
+            className="h-24 resize-none overflow-y-auto"
             onFocus={() => {
               window.scrollTo({
                 top: document.body.scrollHeight,
@@ -105,9 +183,15 @@ const ChatPage: FC = () => {
               }
             }}
           />
-          <Button onClick={() => submitPrompt(prompt)} className="mt-2 h-10 cursor-pointer" disabled={loading}>
-            Enviar
-          </Button>
+          {user.email ? (
+            <Button onClick={() => submitPrompt(prompt)} className="mt-2 h-10 cursor-pointer" disabled={loading}>
+              Enviar
+            </Button>
+          ) : (
+            <Button onClick={() => setModalRegisterState(true)} className="mt-2 h-10 cursor-pointer" disabled={loading}>
+              Cadastrar Email
+            </Button>
+          )}
         </div>
       </div>
     </div>

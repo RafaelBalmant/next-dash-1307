@@ -1,13 +1,17 @@
-import client from "@/lib/openai";
-import { NextRequest, NextResponse } from "next/server";
+import client from '@/lib/openai';
+import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
-    const { prompt } = await req.json();
+  const { prompt, historyMessages } = await req.json();
+  historyMessages.push({
+    role: 'user',
+    content: prompt,
+  });
+  console.log(historyMessages);
+  const response = await client.responses.create({
+    model: 'o4-mini',
+    input: historyMessages,
+  });
 
-    const response = await client.responses.create({
-        model: "gpt-4.1",
-        input: prompt
-    });
-    
-    return NextResponse.json({message: response.output_text}, {status: 200});
+  return NextResponse.json({ message: response.output_text }, { status: 200 });
 }
